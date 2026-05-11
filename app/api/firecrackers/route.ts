@@ -5,7 +5,7 @@ export async function GET() {
   const supabase = await createClient();
 
   const { data, error } = await supabase
-    .from("Firecrackers")
+    .from("firecrackers")
     .select("*")
     .order("id");
   console.log(data,error)
@@ -27,7 +27,7 @@ export async function PUT(req: Request) {
   const { id, name, high, med, low, very_low } = body;
 
   const { data, error } = await supabase
-    .from("Firecrackers")
+    .from("firecrackers")
     .update({
       name,
       high,
