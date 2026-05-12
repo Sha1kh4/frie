@@ -33,28 +33,24 @@ export default function BillingPage() {
   const [category, setCategory] = useState("high");
 
   const [quantity, setQuantity] = useState(1);
-
   const [price, setPrice] = useState(0);
-
+const [now, setNow] = useState<string>("");
   const [billItems, setBillItems] = useState<BillItem[]>([]);
 
   useEffect(() => {
     fetchItems();
   }, []);
-
+useEffect(() => {
+  setNow(new Date().toLocaleString());
+}, []);
   async function fetchItems() {
     try {
       setLoading(true);
 
       const res = await fetch("/api/firecrackers");
-
       const data = await res.json();
 
-      if (Array.isArray(data)) {
-        setItems(data);
-      } else {
-        setItems([]);
-      }
+      setItems(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
       setItems([]);
@@ -69,37 +65,20 @@ export default function BillingPage() {
     );
   }, [selectedId, items]);
 
-  // auto set pricing
+  // auto price based on category
   useEffect(() => {
     if (!selectedItem) return;
 
-    if (category === "high") {
-      setPrice(Number(selectedItem.high));
-    }
-
-    if (category === "med") {
-      setPrice(Number(selectedItem.med));
-    }
-
-    if (category === "low") {
-      setPrice(Number(selectedItem.low));
-    }
-
-    if (category === "very_low") {
-      setPrice(Number(selectedItem.very_low));
-    }
+    if (category === "high") setPrice(selectedItem.high);
+    if (category === "med") setPrice(selectedItem.med);
+    if (category === "low") setPrice(selectedItem.low);
+    if (category === "very_low") setPrice(selectedItem.very_low);
   }, [category, selectedItem]);
 
   function addItem() {
-    if (!selectedItem) {
-      alert("Select item");
-      return;
-    }
+    if (!selectedItem) return;
 
-    if (quantity <= 0) {
-      alert("Invalid quantity");
-      return;
-    }
+    if (quantity <= 0) return;
 
     if (quantity > selectedItem.stock) {
       alert("Not enough stock");
@@ -120,14 +99,11 @@ export default function BillingPage() {
       },
     ]);
 
-    // local stock update
+    // reduce stock locally
     setItems((prev) =>
       prev.map((item) =>
         item.id === selectedItem.id
-          ? {
-              ...item,
-              stock: item.stock - quantity,
-            }
+          ? { ...item, stock: item.stock - quantity }
           : item
       )
     );
@@ -136,16 +112,12 @@ export default function BillingPage() {
   }
 
   function removeItem(index: number) {
-    const removedItem = billItems[index];
+    const removed = billItems[index];
 
-    // restore stock
     setItems((prev) =>
       prev.map((item) =>
-        item.id === removedItem.firecracker_id
-          ? {
-              ...item,
-              stock: item.stock + removedItem.quantity,
-            }
+        item.id === removed.firecracker_id
+          ? { ...item, stock: item.stock + removed.quantity }
           : item
       )
     );
@@ -156,81 +128,66 @@ export default function BillingPage() {
   }
 
   const grandTotal = billItems.reduce(
-    (sum, item) => sum + item.total,
+    (sum, i) => sum + i.total,
     0
   );
 
-  async function saveBill() {
-    try {
-      if (billItems.length === 0) {
-        alert("Add items first");
-        return;
-      }
+  function handlePrint() {
+    window.print();
+  }
 
-      const billRes = await fetch("/api/bills", {
+  async function saveBill() {
+    if (billItems.length === 0) {
+      alert("Add items first");
+      return;
+    }
+
+    const billRes = await fetch("/api/bills", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        customer_name: customerName,
+      }),
+    });
+
+    const bill = await billRes.json();
+
+    for (const item of billItems) {
+      await fetch("/api/bill-items", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          customer_name: customerName,
+          bill_id: bill.id,
+          firecracker_id: item.firecracker_id,
+          category: item.category,
+          quantity: item.quantity,
+          price: item.price,
         }),
       });
-
-      const bill = await billRes.json();
-
-      if (!bill.id) {
-        alert("Failed to create bill");
-        return;
-      }
-
-      for (const item of billItems) {
-        const res = await fetch("/api/bill-items", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            bill_id: bill.id,
-            firecracker_id: item.firecracker_id,
-            category: item.category,
-            quantity: item.quantity,
-            price: item.price,
-          }),
-        });
-
-        const data = await res.json();
-
-        if (data.error) {
-          alert(data.error);
-          return;
-        }
-      }
-
-      alert("Bill Saved");
-
-      setBillItems([]);
-
-      setCustomerName("");
-
-      setSelectedId("");
-
-      setQuantity(1);
-
-      setPrice(0);
-
-      fetchItems();
-    } catch (err) {
-      console.error(err);
-      alert("Something went wrong");
     }
+
+    alert("Bill Saved");
+
+    setBillItems([]);
+    setCustomerName("");
+    setSelectedId("");
+    setQuantity(1);
+    setPrice(0);
+
+    fetchItems();
   }
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-8">
       <div className="mx-auto max-w-6xl rounded-xl bg-white p-4 shadow-lg md:p-6">
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-bold md:text-3xl">
+
+        {/* HEADER */}
+        <div className="mb-6 flex justify-between">
+          <h1 className="text-2xl font-bold">
             Firecracker Billing
           </h1>
 
@@ -241,45 +198,39 @@ export default function BillingPage() {
           )}
         </div>
 
-        {/* customer */}
-        <div className="mb-6">
-          <input
-            type="text"
-            placeholder="Customer Name"
-            value={customerName}
-            onChange={(e) =>
-              setCustomerName(e.target.value)
-            }
-            className="w-full rounded-lg border p-3"
-          />
-        </div>
+        {/* CUSTOMER */}
+        <input
+          className="mb-4 w-full rounded border p-3"
+          placeholder="Customer Name"
+          value={customerName}
+          onChange={(e) =>
+            setCustomerName(e.target.value)
+          }
+        />
 
-        {/* form */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
-          {/* item */}
+        {/* INPUTS */}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
           <select
+            className="border p-2"
             value={selectedId}
             onChange={(e) =>
               setSelectedId(e.target.value)
             }
-            className="rounded-lg border p-3"
           >
             <option value="">Select Item</option>
-
-            {items.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
+            {items.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.name}
               </option>
             ))}
           </select>
 
-          {/* category */}
           <select
+            className="border p-2"
             value={category}
             onChange={(e) =>
               setCategory(e.target.value)
             }
-            className="rounded-lg border p-3"
           >
             <option value="high">High</option>
             <option value="med">Med</option>
@@ -289,165 +240,135 @@ export default function BillingPage() {
             </option>
           </select>
 
-          {/* quantity */}
           <input
+            className="border p-2"
             type="number"
             min={1}
-            max={selectedItem?.stock || 1}
-            placeholder="Quantity"
             value={quantity}
             onChange={(e) =>
               setQuantity(Number(e.target.value))
             }
-            className="rounded-lg border p-3"
           />
 
-          {/* price */}
           <input
+            className="border p-2"
             type="number"
-            placeholder="Price"
             value={price}
             onChange={(e) =>
               setPrice(Number(e.target.value))
             }
-            className="rounded-lg border p-3"
           />
 
-          {/* add */}
           <button
+            className="bg-black text-white"
             onClick={addItem}
-            className="rounded-lg bg-black p-3 text-white"
           >
-            Add Item
+            Add
           </button>
         </div>
 
-        {/* stock info */}
-        {selectedItem && (
-          <div className="mt-4 rounded-lg bg-gray-50 p-4">
-            <p className="font-semibold">
-              Stock Available: {selectedItem.stock}
-            </p>
-
-            <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
-              <div>
-                High Price: ₹{selectedItem.high}
-              </div>
-
-              <div>
-                Med Price: ₹{selectedItem.med}
-              </div>
-
-              <div>
-                Low Price: ₹{selectedItem.low}
-              </div>
-
-              <div>
-                Very Low Price: ₹
-                {selectedItem.very_low}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* table */}
-        <div className="mt-8 overflow-x-auto">
-          <table className="w-full border-collapse overflow-hidden rounded-lg">
-            <thead>
-              <tr className="bg-black text-white">
-                <th className="p-3 text-left">
-                  Item
-                </th>
-
-                <th className="p-3 text-left">
-                  Category
-                </th>
-
-                <th className="p-3 text-left">
-                  Qty
-                </th>
-
-                <th className="p-3 text-left">
-                  Price
-                </th>
-
-                <th className="p-3 text-left">
-                  Total
-                </th>
-
-                <th className="p-3 text-left">
-                  Action
-                </th>
+        {/* TABLE */}
+        <div className="mt-6 overflow-x-auto">
+          <table className="w-full border">
+            <thead className="bg-black text-white">
+              <tr>
+                <th>Item</th>
+                <th>Cat</th>
+                <th>Qty</th>
+                <th>Price</th>
+                <th>Total</th>
+                <th>Action</th>
               </tr>
             </thead>
 
             <tbody>
-              {billItems.map((item, index) => (
-                <tr
-                  key={index}
-                  className="border-b"
-                >
-                  <td className="p-3">
-                    {item.name}
-                  </td>
-
-                  <td className="p-3">
-                    {item.category}
-                  </td>
-
-                  <td className="p-3">
-                    {item.quantity}
-                  </td>
-
-                  <td className="p-3">
-                    ₹{item.price}
-                  </td>
-
-                  <td className="p-3">
-                    ₹{item.total}
-                  </td>
-
-                  <td className="p-3">
+              {billItems.map((b, i) => (
+                <tr key={i}>
+                  <td>{b.name}</td>
+                  <td>{b.category}</td>
+                  <td>{b.quantity}</td>
+                  <td>₹{b.price}</td>
+                  <td>₹{b.total}</td>
+                  <td>
                     <button
                       onClick={() =>
-                        removeItem(index)
+                        removeItem(i)
                       }
-                      className="rounded bg-red-500 px-3 py-1 text-white"
+                      className="text-red-600"
                     >
-                      Delete
+                      X
                     </button>
                   </td>
                 </tr>
               ))}
-
-              {billItems.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="p-4 text-center text-gray-500"
-                  >
-                    No items added
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
 
-        {/* footer */}
-        <div className="mt-6 flex flex-col items-end gap-4">
-          <h2 className="text-2xl font-bold">
+        {/* TOTAL */}
+        <div className="mt-4 flex justify-between">
+          <h2 className="text-xl font-bold">
             Total: ₹{grandTotal}
           </h2>
 
-          <button
-            onClick={saveBill}
-            className="rounded-lg bg-green-600 px-6 py-3 text-white"
-          >
-            Save Bill
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={saveBill}
+              className="bg-green-600 px-4 py-2 text-white"
+            >
+              Save
+            </button>
+
+            <button
+              onClick={handlePrint}
+              className="bg-blue-600 px-4 py-2 text-white"
+            >
+              Print Invoice
+            </button>
+          </div>
+        </div>
+        <div className="print-area">
+
+        {/* THERMAL INVOICE */}
+        <div className="print:block hidden w-[80mm] p-2 text-[12px] font-mono">
+          <div className="text-center">
+            <h2 className="font-bold">
+              FIRECRACKER SHOP
+            </h2>
+            <p>GST INVOICE</p>
+          </div>
+
+          <hr />
+
+          <p>Customer: {customerName || "Walk-in"}</p>
+<p>{now}</p>
+          <hr />
+
+          {billItems.map((b, i) => (
+            <div key={i}>
+              <div className="flex justify-between">
+                <span>{b.name}</span>
+                <span>₹{b.total}</span>
+              </div>
+              <small>
+                {b.quantity} x ₹{b.price}
+              </small>
+            </div>
+          ))}
+
+          <hr />
+
+          <div className="flex justify-between font-bold">
+            <span>Total</span>
+            <span>₹{grandTotal}</span>
+          </div>
+
+          <p className="text-center mt-2">
+            THANK YOU!
+          </p>
         </div>
       </div>
+    </div>
     </div>
   );
 }
