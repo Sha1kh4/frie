@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
+import * as XLSX from "xlsx";
+import { Download } from "lucide-react";
+import { createClient } from "@/lib/supabase/client"; // Ensure you have a client-side supabase helper
 type Firecracker = {
   id: number;
   name: string;
@@ -25,39 +27,28 @@ export default function AdminFirecrackers() {
   const [items, setItems] = useState<Firecracker[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [newItem, setNewItem] =
-    useState<Omit<Firecracker, "id">>(emptyItem);
+  const [newItem, setNewItem] = useState<Omit<Firecracker, "id">>(emptyItem);
 
   useEffect(() => {
     fetchItems();
   }, []);
 
   async function fetchItems() {
-    const res = await fetch("/api/firecrackers");
+    const res = await fetch("/api/firecrackers/update");
+    // const res = await fetch("/api/firecrackers");
     const data = await res.json();
 
     setItems(data);
     setLoading(false);
   }
 
-  function updateField(
-    id: number,
-    field: keyof Firecracker,
-    value: any
-  ) {
+  function updateField(id: number, field: keyof Firecracker, value: any) {
     setItems((prev) =>
-      prev.map((item) =>
-        item.id === id
-          ? { ...item, [field]: value }
-          : item
-      )
+      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
     );
   }
 
-  function updateNewField(
-    field: keyof Omit<Firecracker, "id">,
-    value: any
-  ) {
+  function updateNewField(field: keyof Omit<Firecracker, "id">, value: any) {
     setNewItem((prev) => ({
       ...prev,
       [field]: value,
@@ -80,18 +71,16 @@ export default function AdminFirecrackers() {
     fetchItems();
   }
   async function deleteRow(id: number) {
-  const confirmed = confirm(
-    "Are you sure you want to delete this item?"
-  );
+    const confirmed = confirm("Are you sure you want to delete this item?");
 
-  if (!confirmed) return;
+    if (!confirmed) return;
 
-  await fetch(`/api/firecrackers/update?id=${id}`, {
-    method: "DELETE",
-  });
+    await fetch(`/api/firecrackers/update?id=${id}`, {
+      method: "DELETE",
+    });
 
-  fetchItems();
-}
+    fetchItems();
+  }
 
   async function createItem() {
     await fetch("/api/firecrackers/update", {
@@ -108,31 +97,76 @@ export default function AdminFirecrackers() {
 
     fetchItems();
   }
+  const exportFullDatabase = async () => {
+    const supabase = createClient();
 
+    // 1. Fetch all data in parallel for speed
+    const [
+      { data: firecrackers },
+      { data: bills },
+      { data: billItems },
+      { data: adjustments },
+    ] = await Promise.all([
+      supabase.from("firecrackers").select("*").order("id"),
+      supabase.from("bills").select("*").order("id", { ascending: false }),
+      supabase.from("bill_items").select("*").order("id"),
+      supabase
+        .from("stock_adjustments")
+        .select("*")
+        .order("created_at", { ascending: false }),
+    ]);
+
+    // 2. Create a new Workbook
+    const workbook = XLSX.utils.book_new();
+
+    // 3. Helper to add sheets safely
+    const addSheet = (data: any[] | null, name: string) => {
+      if (!data || data.length === 0) {
+        const ws = XLSX.utils.json_to_sheet([{ Info: "No data available" }]);
+        XLSX.utils.book_append_sheet(workbook, ws, name);
+      } else {
+        const ws = XLSX.utils.json_to_sheet(data);
+        XLSX.utils.book_append_sheet(workbook, ws, name);
+      }
+    };
+
+    // 4. Add each table as a separate tab
+    addSheet(firecrackers, "Inventory");
+    addSheet(bills, "Sales_bills");
+    addSheet(billItems, "Bill_Details");
+    addSheet(adjustments, "Stock_Logs");
+
+    // 5. Save the file
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[:.]/g, "-")
+      .slice(0, 19);
+    XLSX.writeFile(workbook, `Full_Backup_${timestamp}.xlsx`);
+  };
   if (loading) {
     return <div>Loading...</div>;
   }
 
   return (
     <div className="p-4 md:p-8">
-      <h1 className="mb-6 text-2xl font-bold">
-        Firecracker Admin Panel
-      </h1>
-
+      <h1 className="mb-6 text-2xl font-bold">Firecracker Admin Panel</h1>
+      <button
+        onClick={exportFullDatabase}
+        className="flex items-center gap-2 rounded-md bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 transition-colors"
+      >
+        <Download size={16} />
+        Export to Excel
+      </button>
       {/* ADD NEW ITEM */}
       <div className="mb-8 rounded border p-4">
-        <h2 className="mb-4 text-lg font-semibold">
-          Add New Firecracker
-        </h2>
+        <h2 className="mb-4 text-lg font-semibold">Add New Firecracker</h2>
 
         <div className="flex flex-wrap gap-2">
           <input
             placeholder="Name"
             className="border p-2"
             value={newItem.name}
-            onChange={(e) =>
-              updateNewField("name", e.target.value)
-            }
+            onChange={(e) => updateNewField("name", e.target.value)}
           />
 
           <input
@@ -140,12 +174,7 @@ export default function AdminFirecrackers() {
             placeholder="High"
             className="w-24 border p-2"
             value={newItem.high}
-            onChange={(e) =>
-              updateNewField(
-                "high",
-                Number(e.target.value)
-              )
-            }
+            onChange={(e) => updateNewField("high", Number(e.target.value))}
           />
 
           <input
@@ -153,12 +182,7 @@ export default function AdminFirecrackers() {
             placeholder="Med"
             className="w-24 border p-2"
             value={newItem.med}
-            onChange={(e) =>
-              updateNewField(
-                "med",
-                Number(e.target.value)
-              )
-            }
+            onChange={(e) => updateNewField("med", Number(e.target.value))}
           />
 
           <input
@@ -166,12 +190,7 @@ export default function AdminFirecrackers() {
             placeholder="Low"
             className="w-24 border p-2"
             value={newItem.low}
-            onChange={(e) =>
-              updateNewField(
-                "low",
-                Number(e.target.value)
-              )
-            }
+            onChange={(e) => updateNewField("low", Number(e.target.value))}
           />
 
           <input
@@ -179,12 +198,7 @@ export default function AdminFirecrackers() {
             placeholder="Very Low"
             className="w-24 border p-2"
             value={newItem.very_low}
-            onChange={(e) =>
-              updateNewField(
-                "very_low",
-                Number(e.target.value)
-              )
-            }
+            onChange={(e) => updateNewField("very_low", Number(e.target.value))}
           />
 
           <input
@@ -192,12 +206,7 @@ export default function AdminFirecrackers() {
             placeholder="Stock"
             className="w-24 border p-2"
             value={newItem.stock}
-            onChange={(e) =>
-              updateNewField(
-                "stock",
-                Number(e.target.value)
-              )
-            }
+            onChange={(e) => updateNewField("stock", Number(e.target.value))}
           />
 
           <button
@@ -226,20 +235,13 @@ export default function AdminFirecrackers() {
 
           <tbody>
             {items.map((item) => (
-              <tr
-                key={item.id}
-                className="border-b"
-              >
+              <tr key={item.id} className="border-b">
                 <td>
                   <input
                     className="border p-1"
                     value={item.name}
                     onChange={(e) =>
-                      updateField(
-                        item.id,
-                        "name",
-                        e.target.value
-                      )
+                      updateField(item.id, "name", e.target.value)
                     }
                   />
                 </td>
@@ -250,11 +252,7 @@ export default function AdminFirecrackers() {
                     className="w-20 border p-1"
                     value={item.high}
                     onChange={(e) =>
-                      updateField(
-                        item.id,
-                        "high",
-                        Number(e.target.value)
-                      )
+                      updateField(item.id, "high", Number(e.target.value))
                     }
                   />
                 </td>
@@ -265,11 +263,7 @@ export default function AdminFirecrackers() {
                     className="w-20 border p-1"
                     value={item.med}
                     onChange={(e) =>
-                      updateField(
-                        item.id,
-                        "med",
-                        Number(e.target.value)
-                      )
+                      updateField(item.id, "med", Number(e.target.value))
                     }
                   />
                 </td>
@@ -280,11 +274,7 @@ export default function AdminFirecrackers() {
                     className="w-20 border p-1"
                     value={item.low}
                     onChange={(e) =>
-                      updateField(
-                        item.id,
-                        "low",
-                        Number(e.target.value)
-                      )
+                      updateField(item.id, "low", Number(e.target.value))
                     }
                   />
                 </td>
@@ -295,11 +285,7 @@ export default function AdminFirecrackers() {
                     className="w-20 border p-1"
                     value={item.very_low ?? 0}
                     onChange={(e) =>
-                      updateField(
-                        item.id,
-                        "very_low",
-                        Number(e.target.value)
-                      )
+                      updateField(item.id, "very_low", Number(e.target.value))
                     }
                   />
                 </td>
@@ -310,29 +296,25 @@ export default function AdminFirecrackers() {
                     className="w-20 border p-1"
                     value={item.stock}
                     onChange={(e) =>
-                      updateField(
-                        item.id,
-                        "stock",
-                        Number(e.target.value)
-                      )
+                      updateField(item.id, "stock", Number(e.target.value))
                     }
                   />
                 </td>
-<td className="space-x-2">
-  <button
-    onClick={() => saveRow(item)}
-    className="rounded bg-green-600 px-3 py-1 text-white"
-  >
-    Save
-  </button>
+                <td className="space-x-2">
+                  <button
+                    onClick={() => saveRow(item)}
+                    className="rounded bg-green-600 px-3 py-1 text-white"
+                  >
+                    Save
+                  </button>
 
-  <button
-    onClick={() => deleteRow(item.id)}
-    className="rounded bg-red-600 px-3 py-1 text-white"
-  >
-    Delete
-  </button>
-</td>
+                  <button
+                    onClick={() => deleteRow(item.id)}
+                    className="rounded bg-red-600 px-3 py-1 text-white"
+                  >
+                    Delete
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
