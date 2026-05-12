@@ -41,7 +41,7 @@ export async function POST(req: Request) {
 
     // insert bill item
     const { data, error } = await supabase
-      .from("Bill_Items")
+      .from("bill_items")
       .insert({
         bill_id,
         firecracker_id,
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
 
     // update total
     const { data: items } = await supabase
-      .from("Bill_Items")
+      .from("bill_items")
       .select("total")
       .eq("bill_id", bill_id);
 
@@ -80,7 +80,7 @@ export async function POST(req: Request) {
       ) || 0;
 
     await supabase
-      .from("Bills")
+      .from("bills")
       .update({
         total_amount,
       })

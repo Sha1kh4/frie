@@ -5,10 +5,10 @@ export async function GET() {
   const supabase = await createClient();
 
   const { data, error } = await supabase
-    .from("Bills")
+    .from("bills")
     .select(`
       *,
-      Bill_Items (
+      bill_items (
         *,
         firecrackers (*)
       )
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
   const { customer_name } = body;
 
   const { data, error } = await supabase
-    .from("Bills")
+    .from("bills")
     .insert({
       customer_name,
     })

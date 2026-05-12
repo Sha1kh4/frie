@@ -10,7 +10,7 @@ export async function DELETE(
 
   // get item
   const { data: item, error } = await supabase
-    .from("Bill_Items")
+    .from("bill_items")
     .select("*")
     .eq("id", id)
     .single();
@@ -41,7 +41,7 @@ export async function DELETE(
 
   // delete item
   await supabase
-    .from("Bill_Items")
+    .from("bill_items")
     .delete()
     .eq("id", id);
 
