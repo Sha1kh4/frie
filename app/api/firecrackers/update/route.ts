@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 
-// GET ALL
+// GET
 export async function GET() {
   const supabase = await createClient();
 
@@ -22,7 +22,7 @@ export async function GET() {
 }
 
 
-// CREATE NEW
+// CREATE
 export async function POST(req: Request) {
   const supabase = await createClient();
 
@@ -56,9 +56,7 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
-  console.log(data);
-  console.log("updated a row");
-  console.log(body)
+
   return NextResponse.json(data);
 }
 
@@ -80,7 +78,6 @@ export async function PUT(req: Request) {
     reason,
   } = body;
 
-  // old row
   const { data: oldData } = await supabase
     .from("firecrackers")
     .select("*")
@@ -94,7 +91,6 @@ export async function PUT(req: Request) {
     );
   }
 
-  // update
   const { data, error } = await supabase
     .from("firecrackers")
     .update({
@@ -116,7 +112,6 @@ export async function PUT(req: Request) {
     );
   }
 
-  // stock adjustment log
   await supabase
     .from("Stock_Adjustments")
     .insert({
@@ -132,7 +127,40 @@ export async function PUT(req: Request) {
     customer_name: "ADMIN",
     total_amount: 0,
     type: "ADJUSTMENT",
-  });
+    });
 
   return NextResponse.json(data);
+}
+
+
+// DELETE
+export async function DELETE(req: Request) {
+  const supabase = await createClient();
+
+  const { searchParams } = new URL(req.url);
+
+  const id = searchParams.get("id");
+
+  if (!id) {
+    return NextResponse.json(
+      { error: "ID required" },
+      { status: 400 }
+    );
+  }
+
+  const { error } = await supabase
+    .from("firecrackers")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    return NextResponse.json(
+      { error: error.message },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({
+    success: true,
+  });
 }
