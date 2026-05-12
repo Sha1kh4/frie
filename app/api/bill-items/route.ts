@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     // get current stock
     const { data: cracker, error: crackerError } =
       await supabase
-        .from("Firecrackers")
+        .from("firecrackers")
         .select("*")
         .eq("id", firecracker_id)
         .single();
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
 
     // reduce stock
     await supabase
-      .from("Firecrackers")
+      .from("firecrackers")
       .update({
         stock: currentStock - quantity,
       })

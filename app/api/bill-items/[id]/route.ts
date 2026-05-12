@@ -24,7 +24,7 @@ export async function DELETE(
 
   // restore stock
   const { data: cracker } = await supabase
-    .from("Firecrackers")
+    .from("firecrackers")
     .select("*")
     .eq("id", item.firecracker_id)
     .single();
@@ -32,7 +32,7 @@ export async function DELETE(
   const currentStock = cracker?.[item.category] || 0;
 
   await supabase
-    .from("Firecrackers")
+    .from("firecrackers")
     .update({
       [item.category]:
         currentStock + item.quantity,

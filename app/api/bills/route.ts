@@ -10,7 +10,7 @@ export async function GET() {
       *,
       Bill_Items (
         *,
-        Firecrackers (*)
+        firecrackers (*)
       )
     `)
     .order("id", { ascending: false });
